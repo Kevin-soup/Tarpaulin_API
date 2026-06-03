@@ -257,9 +257,9 @@ def update_avatar(id):
     file_obj = request.files['file']
 
     # Check if avatar exists. Remove old file from Cloud Storage.
-    if target_user.get("avatar_blob_name"):
+    if target_user.get("avatar_file_name"):
         bucket = storage_client.get_bucket(AVATAR_BUCKET)
-        old_blob = bucket.blob(target_user["avatar_blob_name"])
+        old_blob = bucket.blob(target_user["avatar_file_name"])
         old_blob.delete()
 
     # Generate random file name for Cloud Storage.
@@ -278,7 +278,7 @@ def update_avatar(id):
     blob.upload_from_file(file_obj, content_type='image/png')
 
     # Update user information. Success.
-    target_user["avatar_blob_name"] = random_filename
+    target_user["avatar_file_name"] = random_filename
     target_user["avatar_url"] = f"{request.url_root.rstrip('/')}/users/{id}/avatar"
     client.put(target_user)
 
@@ -301,14 +301,14 @@ def get_avatar(id):
         return {"Error": "The JWT is valid but doesn’t belong to the user whose ID is in the path parameter."}, 403
 
     # Check if avatar exists. Failure.
-    if not target_user.get("avatar_blob_name"):
+    if not target_user.get("avatar_file_name"):
         return {"Error": "The JWT is valid, belongs to the user whose ID is in the path parameter, but the user doesn’t have an avatar."}, 404
 
     # Get bucket handle.
     bucket = storage_client.get_bucket(AVATAR_BUCKET)
     
     # Create blob object with file name.
-    blob = bucket.blob(target_user["avatar_blob_name"])
+    blob = bucket.blob(target_user["avatar_file_name"])
     
     # Download file into memory.
     file_obj = io.BytesIO()
@@ -335,20 +335,20 @@ def delete_avatar(id):
         return {"Error": "The JWT is valid but doesn’t belong to the user whose ID is in the path parameter."}, 403
 
     # Check if avatar exists. Failure.
-    if not target_user.get("avatar_blob_name"):
+    if not target_user.get("avatar_file_name"):
         return {"Error": "The JWT is valid, belongs to the user whose ID is in the path parameter, but the user doesn’t have an avatar."}, 404
 
     # Get bucket handle.
     bucket = storage_client.get_bucket(AVATAR_BUCKET)
     
     # Create blob object with file name.
-    blob = bucket.blob(target_user["avatar_blob_name"])
+    blob = bucket.blob(target_user["avatar_file_name"])
     
     # Delete file from Cloud Storage.
     blob.delete()
 
     # Update user information. Success.
-    target_user["avatar_blob_name"] = None
+    target_user["avatar_file_name"] = None
     target_user["avatar_url"] = None
     client.put(target_user)
 
@@ -681,11 +681,6 @@ def get_enrollment(id):
     current_students = target_course.get("students", [])
 
     return jsonify(current_students), 200
-
-
-
-
-
 
 
 if __name__ == '__main__':
