@@ -1,24 +1,29 @@
-from flask import Flask, request, jsnonify, send_file
-from google.cloud import storage, datastore
-import io
-import requests
-import json
+import io, json, os, requests, uuid
 from six.moves.urllib.request import urlopen
+from dotenv import load_dotenv
+from flask import Flask, request, jsonify, send_file
+from google.cloud import storage, datastore
 from jose import jwt
 
 app = Flask(__name__)
 client = datastore.Client()
+storage_client = storage.Client()
+load_dotenv()
 
-# Constants.
-PHOTO_BUCKET='___'
+# Constant.
+AVATAR_BUCKET='___'
 USER = '/users'
-COURSES = '/courses'
+COURSE = '/courses'
 ID = '/id'
 
-#################################### AUTH0 AUTHENTICATION ####################################
-# Code adapted from: 
-# https://auth0.com/docs/quickstart/backend/python/01-authorization?_ga=2.46956069.349333901.1589042886-466012638.1589042885#create-the-jwt-validation-decorator
+# Auth0 Configuration.
+CLIENT_ID = os.getenv("AUTH0_CLIENT_ID")
+CLIENT_SECRET = os.getenv("AUTH0_CLIENT_SECRET")
+DOMAIN = os.getenv("AUTH0_DOMAIN")
+ALGORITHMS = ["RS256"]
 
+# Auth0 - JWT Token Authentication.
+# Code adapted from: https://auth0.com/docs/quickstart/backend/python
 class AuthError(Exception):
     def __init__(self, error, status_code):
         self.error = error
@@ -99,8 +104,8 @@ def verify_jwt(request):
 
 
 # API Endpoints.
-#################################### USER LOGIN - JWT GENERATION ####################################
-@app.route('/login', methods=['POST'])
+############################ USER LOGIN - JWT GENERATION #############################
+@app.route(USER + '/login', methods=['POST'])
 def login_user():
     # Save JSON request.
     content = request.get_json()
@@ -126,7 +131,7 @@ def login_user():
     return response.json(), response.status_code
     
 
-##################################### DECODE A JWT #####################################
+#################################### DECODE A JWT ####################################
 @app.route('/decode', methods=['GET'])
 def decode_jwt():
     # Validate JWT.
@@ -136,57 +141,121 @@ def decode_jwt():
     return payload, 200 
 
 
-@app.route('/images', methods=['POST'])
-def store_image():
-    # Any files in the request will be available in request.files object
-    # Check if there is an entry in request.files with the key 'file'
+#################################### GET ALL USERS ####################################
+@app.route(USER, methods=['GET'])
+def get_all_users():
+    # Validate JWT and extract sub.
+    payload = verify_jwt(request)
+    user_sub = payload.get("sub")
+
+    # Identify user's role from Datastore.
+    query = client.query(kind='users')
+    query.add_filter("sub", "=", user_sub)
+    results = list(query.fetch())
+
+    # Check for admin role. Failure.
+    requesting_user = results[0]
+    if requesting_user.get("role") != "admin":
+        return {"Error": "The JWT is valid but doesn’t belong to an admin."}, 403
+
+    # Get all users from Datastore.
+    all_users_query = client.query(kind='users')
+    all_users = list(all_users_query.fetch())
+    output = []
+
+    # Return array with all users. Success.
+    for entity in all_users:
+        user_data = dict(entity)
+        user_data["id"] = entity.key.id
+        output.append(user_data)
+
+    return jsonify(output), 200
+
+
+###################################### GET A USER ########################################
+@app.route(USER + '/<int:id>', methods=['GET'])
+def get_user(id):
+    # Validate JWT and extract sub.
+    payload = verify_jwt(request)
+    user_sub = payload.get("sub")
+
+    # Find target with ID.
+    user_key = client.key('users', id)
+    target_user = client.get(key=user_key)
+
+    # Handles non-existent target ID. Failure.
+    if target_user is None:
+        return {"Error": "The JWT is valid, but the user doesn’t exist."}, 403
+
+    # Identify user's role from Datastore.
+    query = client.query(kind='users')
+    query.add_filter("sub", "=", user_sub)
+    results = list(query.fetch())
+
+    # Check for admin role and user self access. Failure.
+    requesting_user = results[0]
+    if requesting_user.get("role") != "admin" and requesting_user.key.id != id:
+        return {"Error": "The JWT is valid, and the user exists, but the JWT doesn’t belong to either an admin or to the user whose ID is in the path parameter."}, 403
+
+    # Return target information. Success.
+    user_data = {
+        "id": id,
+        "role": target_user.get("role"),
+        "sub": target_user.get("sub")
+    }
+
+    # Check if target has avatar URL.
+    if target_user.get("avatar_url"):
+        user_data["avatar_url"] = target_user.get("avatar_url")
+
+    # Check if target has courses.
+    if user_data["role"] != "admin":
+        user_data["courses"] = target_user.get("courses", [])
+
+    return jsonify(user_data), 200
+
+
+################################# CREATE & UPDATE AVATAR ###################################
+@app.route(USER + '/<int:id>/avatar', methods=['POST'])
+def update_avatar(id):
+    # Check if the file key exists in the request. Failure.
     if 'file' not in request.files:
-        return ('No file sent in request', 400)
-    # Set file_obj to the file sent in the request
-    file_obj = request.files['file']
-    # If the multipart form data has a part with name 'tag', set the
-    # value of the variable 'tag' to the value of 'tag' in the request.
-    # Note we are not doing anything with the variable 'tag' in this
-    # example, however this illustrates how we can extract data from the
-    # multipart form data in addition to the files.
-    if 'tag' in request.form:
-        tag = request.form['tag']
-    # Create a storage client
-    storage_client = storage.Client()
-    # Get a handle on the bucket
-    bucket = storage_client.get_bucket(PHOTO_BUCKET)
-    # Create a blob object for the bucket with the name of the file
-    blob = bucket.blob(file_obj.filename)
-    # Position the file_obj to its beginning
-    file_obj.seek(0)
-    # Upload the file into Cloud Storage
-    blob.upload_from_file(file_obj)
-    return ({'file_name': file_obj.filename},201)
+        return {"Error": "The request doesn’t include the key “file.”"}, 400
 
-@app.route('/images/<file_name>', methods=['GET'])
-def get_image(file_name):
-    storage_client = storage.Client()
-    bucket = storage_client.get_bucket(PHOTO_BUCKET)
-    # Create a blob with the given file name
-    blob = bucket.blob(file_name)
-    # Create a file object in memory using Python io package
-    file_obj = io.BytesIO()
-    # Download the file from Cloud Storage to the file_obj variable
-    blob.download_to_file(file_obj)
-    # Position the file_obj to its beginning
-    file_obj.seek(0)
-    # Send the object as a file in the response with the correct MIME type and file name
-    return send_file(file_obj, mimetype='image/x-png', download_name=file_name)
+    # Validate JWT and extract sub.
+    payload = verify_jwt(request)
+    user_sub = payload.get("sub")
 
+    # Find target with ID.
+    user_key = client.key('users', id)
+    target_user = client.get(key=user_key)
 
-@app.route('/images/<file_name>', methods=['DELETE'])
-def delete_image(file_name):
-    storage_client = storage.Client()
-    bucket = storage_client.get_bucket(PHOTO_BUCKET)
-    blob = bucket.blob(file_name)
-    # Delete the file from Cloud Storage
-    blob.delete()
-    return '',204
+    # Check for user self access. Failure.
+    if target_user is None or target_user.get("sub") != user_sub:
+        return {"Error": "The JWT is valid but doesn’t belong to the user whose ID is in the path parameter."}, 403
+
+    file = request.files['file']
+
+    # Generate a random file name for Google Cloud Storage.
+    import uuid
+    random_filename = f"{uuid.uuid4().hex}.png"
+
+    # Upload the file to Google Cloud Storage.
+    bucket = storage_client.bucket(AVATAR_BUCKET)
+    blob = bucket.blob(random_filename)
+    
+    # Reset file pointer and upload.
+    file.seek(0)
+    blob.upload_from_file(file, content_type='image/png')
+
+    # Update user entity with avatar storage details and public application URL.
+    target_user["avatar_blob_name"] = random_filename
+    target_user["avatar_url"] = f"{request.url_root.rstrip('/')}/users/{id}/avatar"
+    client.put(target_user)
+
+    # Return avatar URL reference. Success.
+    return jsonify({"avatar_url": target_user["avatar_url"]}), 200
+
 
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=8080, debug=True)
