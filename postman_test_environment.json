@@ -1,6 +1,6 @@
 {
 	"id": "98e257d2-29a1-4978-9578-65e0fc689867",
-	"name": "assignment6",
+	"name": "course-management-tool",
 	"values": [
 		{
 			"key": "app_url",
@@ -10,7 +10,7 @@
 		},
 		{
 			"key": "password",
-			"value": "Cheese1234!",
+			"value": "GoodDay777",
 			"type": "default",
 			"enabled": true
 		},

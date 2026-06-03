@@ -1,7 +1,7 @@
 {
   "info": {
     "_postman_id": "97e7c3a4-2c72-46c5-9a2a-d2f0d5ef4a1b",
-    "name": "assignment6",
+    "name": "course-management-tool",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "_exporter_id": "9037348"
   },
@@ -1221,7 +1221,7 @@
                 {
                   "key": "file",
                   "type": "file",
-                  "src": "/C:/Users/nauman/Documents/GitHub/cs493_redev/code/a6-portfolio/files/student1.png"
+                  "src": "/C:/CS493/hw6/avatar_test.png"
                 }
               ]
             },
@@ -1349,7 +1349,7 @@
                 {
                   "key": "file",
                   "type": "file",
-                  "src": "/C:/Users/nauman/Documents/GitHub/cs493_redev/code/a6-portfolio/files/student1.png"
+                  "src": "/C:/CS493/hw6/avatar_test.png"
                 }
               ]
             },
@@ -1417,7 +1417,7 @@
                 {
                   "key": "file_name",
                   "type": "file",
-                  "src": "/C:/Users/nauman/Documents/GitHub/cs493_redev/code/a6-portfolio/files/student1.png"
+                  "src": "/C:/CS493/hw6/avatar_test.png"
                 }
               ]
             },
@@ -1486,7 +1486,7 @@
                 {
                   "key": "file",
                   "type": "file",
-                  "src": "/C:/Users/nauman/Documents/GitHub/cs493_redev/code/a6-portfolio/files/student1.png"
+                  "src": "/C:/CS493/hw6/avatar_test.png"
                 }
               ]
             },
@@ -1557,7 +1557,7 @@
                 {
                   "key": "file",
                   "type": "file",
-                  "src": "/C:/Users/nauman/Documents/GitHub/cs493_redev/code/a6-portfolio/files/student1.png"
+                  "src": "/C:/CS493/hw6/avatar_test.png"
                 }
               ]
             },

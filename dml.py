@@ -23,8 +23,7 @@ def populate_users():
         
         user_entity.update({
             "sub": user["sub"],
-            "role": user["role"],
-            "avatar_file_name": None 
+            "role": user["role"]
         })
         
         client.put(user_entity)
