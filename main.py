@@ -48,28 +48,19 @@ def verify_jwt(request):
     if 'Authorization' in request.headers:
         auth_header = request.headers['Authorization'].split()
         if len(auth_header) != 2 or auth_header[0].lower() != 'bearer':
-            raise AuthError({"code": "invalid_header",
-                             "description": "Authorization header must be Bearer token"}, 401)
+            raise AuthError(ERROR_401, 401)
         token = auth_header[1]
     else:
-        raise AuthError({"code": "no auth header",
-                            "description":
-                                "Authorization header is missing"}, 401)
-    
+        raise AuthError(ERROR_401, 401)
+
     jsonurl = urlopen("https://"+ DOMAIN+"/.well-known/jwks.json")
     jwks = json.loads(jsonurl.read())
     try:
         unverified_header = jwt.get_unverified_header(token)
     except jwt.JWTError:
-        raise AuthError({"code": "invalid_header",
-                        "description":
-                            "Invalid header. "
-                            "Use an RS256 signed JWT Access Token"}, 401)
+        raise AuthError(ERROR_401, 401)
     if unverified_header["alg"] == "HS256":
-        raise AuthError({"code": "invalid_header",
-                        "description":
-                            "Invalid header. "
-                            "Use an RS256 signed JWT Access Token"}, 401)
+        raise AuthError(ERROR_401, 401)
     rsa_key = {}
     for key in jwks["keys"]:
         if key["kid"] == unverified_header["kid"]:
@@ -90,24 +81,15 @@ def verify_jwt(request):
                 issuer="https://"+ DOMAIN+"/"
             )
         except jwt.ExpiredSignatureError:
-            raise AuthError({"code": "token_expired",
-                            "description": "token is expired"}, 401)
+            raise AuthError(ERROR_401, 401)
         except jwt.JWTClaimsError:
-            raise AuthError({"code": "invalid_claims",
-                            "description":
-                                "incorrect claims,"
-                                " please check the audience and issuer"}, 401)
+            raise AuthError(ERROR_401, 401)
         except Exception:
-            raise AuthError({"code": "invalid_header",
-                            "description":
-                                "Unable to parse authentication"
-                                " token."}, 401)
+            raise AuthError(ERROR_401, 401)
 
         return payload
     else:
-        raise AuthError({"code": "no_rsa_key",
-                            "description":
-                                "No RSA key in JWKS"}, 401)
+        raise AuthError(ERROR_401, 401)
 
 
 # API Endpoints.
@@ -135,7 +117,7 @@ def login_user():
     response = requests.post(url, json=body, headers=headers)
     
     # Return Auth0 response.
-    return response.json(), response.status_code
+    return jsonify({"token": response.json().get("id_token")}), 200
     
 
 #################################### DECODE A JWT ####################################
@@ -283,12 +265,14 @@ def update_avatar(id):
     # Upload file into Cloud Storage.
     blob.upload_from_file(file_obj, content_type='image/png')
 
-    # Update user information. Success.
+    # Update user information.
     target_user["avatar_file_name"] = random_filename
-    target_user["avatar_url"] = f"{request.url_root.rstrip('/')}/users/{id}/avatar"
     client.put(target_user)
+    
+    # Build return URL. Success.
+    base_url = request.url_root.replace("http://", "https://").rstrip('/')
 
-    return jsonify({"avatar_url": target_user["avatar_url"]}), 200
+    return jsonify({"avatar_url": f"{base_url}/users/{id}/avatar"}), 200
 
 
 ################################### GET AVATAR ###################################
