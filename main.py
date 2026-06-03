@@ -218,7 +218,7 @@ def get_user(id):
 ################################# CREATE & UPDATE AVATAR ###################################
 @app.route(USER + '/<int:id>/avatar', methods=['POST'])
 def update_avatar(id):
-    # Check if the file key exists in the request. Failure.
+    # Check if file exists in request. Failure.
     if 'file' not in request.files:
         return {"Error": "The request doesn’t include the key “file.”"}, 400
 
@@ -234,27 +234,108 @@ def update_avatar(id):
     if target_user is None or target_user.get("sub") != user_sub:
         return {"Error": "The JWT is valid but doesn’t belong to the user whose ID is in the path parameter."}, 403
 
-    file = request.files['file']
+    # Save request file.
+    file_obj = request.files['file']
 
-    # Generate a random file name for Google Cloud Storage.
-    import uuid
+    # Check if avatar exists. Remove old file from Cloud Storage.
+    if target_user.get("avatar_blob_name"):
+        bucket = storage_client.get_bucket(AVATAR_BUCKET)
+        old_blob = bucket.blob(target_user["avatar_blob_name"])
+        old_blob.delete()
+
+    # Generate random file name for Cloud Storage.
     random_filename = f"{uuid.uuid4().hex}.png"
 
-    # Upload the file to Google Cloud Storage.
-    bucket = storage_client.bucket(AVATAR_BUCKET)
+    # Get bucket handle.
+    bucket = storage_client.get_bucket(AVATAR_BUCKET)
+    
+    # Create blob object with file name.
     blob = bucket.blob(random_filename)
     
-    # Reset file pointer and upload.
-    file.seek(0)
-    blob.upload_from_file(file, content_type='image/png')
+    # Position file_obj to beginning.
+    file_obj.seek(0)
+    
+    # Upload file into Cloud Storage.
+    blob.upload_from_file(file_obj, content_type='image/png')
 
-    # Update user entity with avatar storage details and public application URL.
+    # Update user information. Success.
     target_user["avatar_blob_name"] = random_filename
     target_user["avatar_url"] = f"{request.url_root.rstrip('/')}/users/{id}/avatar"
     client.put(target_user)
 
-    # Return avatar URL reference. Success.
     return jsonify({"avatar_url": target_user["avatar_url"]}), 200
+
+
+################################### GET AVATAR ###################################
+@app.route(USER + '/<int:id>/avatar', methods=['GET'])
+def get_avatar(id):
+    # Validate JWT and extract sub.
+    payload = verify_jwt(request)
+    user_sub = payload.get("sub")
+
+    # Find target with ID.
+    user_key = client.key('users', id)
+    target_user = client.get(key=user_key)
+
+    # Check for user self access. Failure.
+    if target_user is None or target_user.get("sub") != user_sub:
+        return {"Error": "The JWT is valid but doesn’t belong to the user whose ID is in the path parameter."}, 403
+
+    # Check if avatar exists. Failure.
+    if not target_user.get("avatar_blob_name"):
+        return {"Error": "The JWT is valid, belongs to the user whose ID is in the path parameter, but the user doesn’t have an avatar."}, 404
+
+    # Get bucket handle.
+    bucket = storage_client.get_bucket(AVATAR_BUCKET)
+    
+    # Create blob object with file name.
+    blob = bucket.blob(target_user["avatar_blob_name"])
+    
+    # Download file into memory.
+    file_obj = io.BytesIO()
+    blob.download_to_file(file_obj)
+    file_obj.seek(0)
+
+    # Return file. Success.
+    return send_file(file_obj, mimetype='image/png'), 200
+
+
+################################## DELETE AVATAR ###################################
+@app.route(USER + '/<int:id>/avatar', methods=['DELETE'])
+def delete_avatar(id):
+    # Validate JWT and extract sub.
+    payload = verify_jwt(request)
+    user_sub = payload.get("sub")
+
+    # Find target with ID.
+    user_key = client.key('users', id)
+    target_user = client.get(key=user_key)
+
+    # Check for user self access. Failure.
+    if target_user is None or target_user.get("sub") != user_sub:
+        return {"Error": "The JWT is valid but doesn’t belong to the user whose ID is in the path parameter."}, 403
+
+    # Check if avatar exists. Failure.
+    if not target_user.get("avatar_blob_name"):
+        return {"Error": "The JWT is valid, belongs to the user whose ID is in the path parameter, but the user doesn’t have an avatar."}, 404
+
+    # Get bucket handle.
+    bucket = storage_client.get_bucket(AVATAR_BUCKET)
+    
+    # Create blob object with file name.
+    blob = bucket.blob(target_user["avatar_blob_name"])
+    
+    # Delete file from Cloud Storage.
+    blob.delete()
+
+    # Update user information. Success.
+    target_user["avatar_blob_name"] = None
+    target_user["avatar_url"] = None
+    client.put(target_user)
+
+    return '', 204
+
+
 
 
 if __name__ == '__main__':
