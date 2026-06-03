@@ -164,7 +164,7 @@ def get_all_users():
     all_users = list(all_users_query.fetch())
     output = []
 
-    # Return array with all users. Success.
+    # Build and return array with all users. Success.
     for entity in all_users:
         user_data = {
             "id": entity.key.id,
@@ -183,7 +183,7 @@ def get_user(id):
     payload = verify_jwt(request)
     user_sub = payload.get("sub")
 
-    # Find target with ID.
+    # Find target on Datastore with ID.
     user_key = client.key('users', id)
     target_user = client.get(key=user_key)
 
@@ -201,20 +201,35 @@ def get_user(id):
     if requesting_user.get("role") != "admin" and requesting_user.key.id != id:
         return {"Error": "The JWT is valid, and the user exists, but the JWT doesn’t belong to either an admin or to the user whose ID is in the path parameter."}, 403
 
-    # Return target information. Success.
+    # Build return information. Success.
     user_data = {
         "id": id,
         "role": target_user.get("role"),
         "sub": target_user.get("sub")
     }
+    
+    # Define base URL.
+    base_url = request.url_root.rstrip('/')
 
     # Check if target has avatar URL.
-    if target_user.get("avatar_url"):
-        user_data["avatar_url"] = target_user.get("avatar_url")
+    if target_user.get("avatar_file_name"):
+            user_data["avatar_url"] = f"{base_url}/users/{id}/avatar"
 
     # Check if target has courses.
     if user_data["role"] != "admin":
-        user_data["courses"] = target_user.get("courses", [])
+        course_urls = []
+        course_query = client.query(kind='courses')
+        
+        if user_data["role"] == "instructor":
+            course_query.add_filter(filter=PropertyFilter("instructor_id", "=", id))
+        elif user_data["role"] == "student":
+            course_query.add_filter(filter=PropertyFilter("students", "=", id))
+            
+        courses_fetched = list(course_query.fetch())
+        for course in courses_fetched:
+            course_urls.append(f"{base_url}/courses/{course.key.id}")
+            
+        user_data["courses"] = course_urls
 
     return jsonify(user_data), 200
 
@@ -230,7 +245,7 @@ def update_avatar(id):
     payload = verify_jwt(request)
     user_sub = payload.get("sub")
 
-    # Find target with ID.
+    # Find target on Datastore with ID.
     user_key = client.key('users', id)
     target_user = client.get(key=user_key)
 
@@ -277,7 +292,7 @@ def get_avatar(id):
     payload = verify_jwt(request)
     user_sub = payload.get("sub")
 
-    # Find target with ID.
+    # Find target on Datastore with ID.
     user_key = client.key('users', id)
     target_user = client.get(key=user_key)
 
@@ -311,7 +326,7 @@ def delete_avatar(id):
     payload = verify_jwt(request)
     user_sub = payload.get("sub")
 
-    # Find target with ID.
+    # Find target on Datastore with ID.
     user_key = client.key('users', id)
     target_user = client.get(key=user_key)
 
@@ -339,7 +354,6 @@ def delete_avatar(id):
 
     return '', 204
 
-
 ################################### CREATE A COURSE ###################################
 @app.route(COURSE, methods=['POST'])
 def create_course():
@@ -365,35 +379,36 @@ def create_course():
     if requesting_user.get("role") != "admin":
         return {"Error": "The JWT is valid but doesn’t belong to an admin."}, 403
 
-    # Check if instructor id exists and corresponds to a user with the role "instructor". Failure.
-    instructor_key = client.key('users', int(content["instructor_id"]))
+    # Check instructor id and role. Failure.
+    instructor_id = content["instructor_id"]
+    instructor_key = client.key('users', instructor_id)
     instructor = client.get(key=instructor_key)
 
     if instructor is None or instructor.get("role") != "instructor":
-        return {"Error": "The value of instructor_id is invalid"}, 409
+        return {"Error": "The value of instructor_id doesn’t correspond to the id of an instructor."}, 409
 
-    # Create new course entity. Success.
+    # Create new course entity.
     new_course = datastore.Entity(key=client.key('courses'))
     new_course.update({
         "subject": content["subject"],
-        "number": int(content["number"]),
+        "number": content["number"],
         "title": content["title"],
         "term": content["term"],
-        "instructor_id": int(content["instructor_id"]),
+        "instructor_id": instructor_id,
         "students": []  
     })
     client.put(new_course)
 
-    # Return course information. Success. success response layout.
+    # Return course information. Success. 
     course_id = new_course.key.id
     response_data = {
         "id": course_id,
-        "instructor_id": new_course["instructor_id"],
-        "number": new_course["number"],
+        "instructor_id": instructor_id,
+        "number": content["number"],
         "self": f"{request.url_root.rstrip('/')}/courses/{course_id}",
-        "subject": new_course["subject"],
-        "term": new_course["term"],
-        "title": new_course["title"]
+        "subject": content["subject"],
+        "term": content["term"],
+        "title": content["title"]
     }
 
     return jsonify(response_data), 201
