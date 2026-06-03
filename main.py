@@ -385,9 +385,9 @@ def create_course():
     instructor = client.get(key=instructor_key)
 
     if instructor is None or instructor.get("role") != "instructor":
-        return {"Error": "The value of instructor_id doesn’t correspond to the id of an instructor."}, 409
+        return {"Error": "The value of instructor_id is invalid"}, 409
 
-    # Create new course entity.
+    # Create new course entity. 
     new_course = datastore.Entity(key=client.key('courses'))
     new_course.update({
         "subject": content["subject"],
@@ -412,6 +412,277 @@ def create_course():
     }
 
     return jsonify(response_data), 201
+
+
+###################################### GET ALL COURSES ####################################
+@app.route(COURSE, methods=['GET'])
+def get_all_courses():
+    # Query parameters.
+    limit = int(request.args.get('limit', 3))
+    offset = int(request.args.get('offset', 0))
+
+    # Sort courses by subject from Datastore.
+    course_query = client.query(kind='courses')
+    course_query.order = ['subject']
+    
+    # Iterator pages for pagination.
+    c_iterator = course_query.fetch(limit=limit, offset=offset)
+    pages = c_iterator.pages
+    results = list(next(pages))
+
+    # Define base URL.
+    base_url = request.url_root.rstrip('/')
+    
+    # Build return information. Success. 
+    courses_list = []
+    for course in results:
+        course_id = course.key.id
+        course_data = {
+            "id": course_id,
+            "instructor_id": course.get("instructor_id"),
+            "number": course.get("number"),
+            "self": f"{base_url}/courses/{course_id}",
+            "subject": course.get("subject"),
+            "term": course.get("term"),
+            "title": course.get("title")
+        }
+        courses_list.append(course_data)
+
+    response_data = {
+        "courses": courses_list
+    }
+
+    # Add next page URL.
+    if c_iterator.next_page_token:
+        next_offset = offset + limit
+        response_data["next"] = f"{base_url}/courses?limit={limit}&offset={next_offset}"
+
+    return jsonify(response_data), 200
+
+
+###################################### GET A COURSE ######################################
+@app.route(COURSE + '/<int:id>', methods=['GET'])
+def get_course(id):
+    # Find target on Datastore with ID.
+    course_key = client.key('courses', id)
+    target_course = client.get(key=course_key)
+
+    # Handles non-existent target ID. Failure.
+    if target_course is None:
+        return {"Error": "No course with this ID exists."}, 404
+
+    # Define base URL.
+    base_url = request.url_root.rstrip('/')
+
+    # Build return information. Success. 
+    course_data = {
+        "id": id,
+        "instructor_id": target_course.get("instructor_id"),
+        "number": target_course.get("number"),
+        "self": f"{base_url}/courses/{id}",
+        "subject": target_course.get("subject"),
+        "term": target_course.get("term"),
+        "title": target_course.get("title")
+    }
+
+    return jsonify(course_data), 200
+
+
+################################### UPDATE COURSE ###################################
+@app.route(COURSE + '/<int:id>', methods=['PATCH'])
+def update_course(id):
+    # Save JSON request.
+    content = request.get_json()
+
+    # Validate JWT and extract sub. 
+    payload = verify_jwt(request)
+    user_sub = payload.get("sub")
+
+    # Find target on Datastore with ID.
+    course_key = client.key('courses', id)
+    target_course = client.get(key=course_key)
+
+    # Handles non-existent target ID or invalid permissions. Failure.
+    if target_course is None:
+        return {"Error": "The JWT is valid, but the course doesn’t exist."}, 403
+
+    # Identify user's role from Datastore.
+    query = client.query(kind='users')
+    query.add_filter(filter=PropertyFilter("sub", "=", user_sub))
+    results = list(query.fetch())
+    requesting_user = results[0]
+
+    # Check for admin role. Failure.
+    if requesting_user.get("role") != "admin":
+        return {"Error": "The JWT is valid, and the course exists, but the JWT doesn’t belong to an admin."}, 403
+
+    # Check instructor id and role. Failure.
+    if content and "instructor_id" in content:
+        instructor_id = content["instructor_id"]
+        instructor_key = client.key('users', instructor_id)
+        instructor = client.get(key=instructor_key)
+
+        if instructor is None or instructor.get("role") != "instructor":
+            return {"Error": "The value of instructor_id is invalid"}, 409
+
+    # Update course entity. Success.
+    valid_fields = ["subject", "number", "title", "term", "instructor_id"]
+    if content:
+        for field in valid_fields:
+            if field in content:
+                target_course[field] = content[field]
+        client.put(target_course)
+
+    # Return course information. Success. 
+    base_url = request.url_root.rstrip('/')
+    response_data = {
+        "id": id,
+        "instructor_id": target_course.get("instructor_id"),
+        "number": target_course.get("number"),
+        "self": f"{base_url}/courses/{id}",
+        "subject": target_course.get("subject"),
+        "term": target_course.get("term"),
+        "title": target_course.get("title")
+    }
+
+    return jsonify(response_data), 200
+
+
+################################### DELETE COURSE ###################################
+@app.route(COURSE + '/<int:id>', methods=['DELETE'])
+def delete_course(id):
+    # Validate JWT and extract sub. 
+    payload = verify_jwt(request)
+    user_sub = payload.get("sub")
+
+    # Find target on Datastore with ID.
+    course_key = client.key('courses', id)
+    target_course = client.get(key=course_key)
+
+    # Handles non-existent target ID. Failure.
+    if target_course is None:
+        return {"Error": "The JWT is valid, but the course doesn’t exist."}, 403
+
+    # Identify user's role from Datastore.
+    query = client.query(kind='users')
+    query.add_filter(filter=PropertyFilter("sub", "=", user_sub))
+    results = list(query.fetch())
+    requesting_user = results[0]
+
+    # Check for admin role. Failure.
+    if requesting_user.get("role") != "admin":
+        return {"Error": "The JWT is valid, and the course exists, but the JWT doesn’t belong to an admin."}, 403
+
+    # Delete course. Success.
+    client.delete(course_key)
+
+    return '', 204
+
+
+################################### UPDATE ENROLLMENT ###################################
+@app.route(COURSE + '/<int:id>/students', methods=['PATCH'])
+def update_enrollment(id):
+    # Save JSON request.
+    content = request.get_json()
+
+    # Validate JWT and extract sub. 
+    payload = verify_jwt(request)
+    user_sub = payload.get("sub")
+
+    # Find target on Datastore with ID.
+    course_key = client.key('courses', id)
+    target_course = client.get(key=course_key)
+
+    # Handles non-existent target ID. Failure.
+    if target_course is None:
+        return {"Error": "The JWT is valid, but the course doesn’t exist."}, 403
+
+    # Identify user's role from Datastore.
+    query = client.query(kind='users')
+    query.add_filter(filter=PropertyFilter("sub", "=", user_sub))
+    results = list(query.fetch())
+
+
+    # Check for admin or course instructor role. Failure.
+    requesting_user = results[0]
+    is_admin = requesting_user.get("role") == "admin"
+    is_instructor = requesting_user.get("role") == "instructor" and target_course.get("instructor_id") == requesting_user.key.id
+
+    if not is_admin and not is_instructor:
+        return {"Error": "The JWT is valid, and the course exists, but the JWT doesn’t belong to either an admin or to the instructor of the course."}, 403
+
+    # Save add and remove lists. 
+    add_list = content.get("add", [])
+    remove_list = content.get("remove", [])
+
+    # Handles common values in lists.
+    if set(add_list) & set(remove_list):
+        return {"Error": "Enrollment data is invalid"}, 409
+
+    # Check that IDs belong to users with student role.
+    all_student_ids = list(set(add_list + remove_list))
+    if all_student_ids:
+        student_keys = [client.key('users', s_id) for s_id in all_student_ids]
+        fetched_students = client.get_multi(student_keys)
+        
+        # Check that all users are students.
+        if len(fetched_students) != len(all_student_ids) or any(s.get("role") != "student" for s in fetched_students):
+            return {"Error": "Enrollment data is invalid"}, 409
+
+    # Build new course entity.
+    current_students = target_course.get("students", [])
+
+    # Add students to course. 
+    for student_id in add_list:
+        if student_id not in current_students:
+            current_students.append(student_id)
+
+    # Remove students from course.
+    for student_id in remove_list:
+        if student_id in current_students:
+            current_students.remove(student_id)
+
+    # Update Datastore with new course entity. Success.
+    target_course["students"] = current_students
+    client.put(target_course)
+
+    return '', 200
+
+
+################################### GET ENROLLMENT ###################################
+@app.route(COURSE + '/<int:id>/students', methods=['GET'])
+def get_enrollment(id):
+    # Validate JWT and extract sub. 
+    payload = verify_jwt(request)
+    user_sub = payload.get("sub")
+
+    # Find target on Datastore with ID.
+    course_key = client.key('courses', id)
+    target_course = client.get(key=course_key)
+
+    # Handles non-existent target ID. Failure.
+    if target_course is None:
+        return {"Error": "The JWT is valid, but the course doesn’t exist."}, 403
+
+    # Identify user's role from Datastore.
+    query = client.query(kind='users')
+    query.add_filter(filter=PropertyFilter("sub", "=", user_sub))
+    results = list(query.fetch())
+
+    # Check for admin or course instructor role. Failure.
+    requesting_user = results[0]
+    is_admin = requesting_user.get("role") == "admin"
+    is_instructor = requesting_user.get("role") == "instructor" and target_course.get("instructor_id") == requesting_user.key.id
+
+    if not is_admin and not is_instructor:
+        return {"Error": "The JWT is valid, and the course exists, but the JWT doesn’t belong to either an admin or to the instructor of the course."}, 403
+
+    # Return course information. Success. 
+    current_students = target_course.get("students", [])
+
+    return jsonify(current_students), 200
+
+
 
 
 
