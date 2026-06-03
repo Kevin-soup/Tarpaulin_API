@@ -1,2 +1,5 @@
 Flask==3.1.3
 google-cloud-storage==3.10.1
+google-cloud-datastore
+python-jose
+requests

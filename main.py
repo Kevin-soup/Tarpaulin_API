@@ -1,5 +1,5 @@
 import io, json, os, requests, uuid
-from six.moves.urllib.request import urlopen
+from urllib.request import urlopen
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify, send_file
 from google.cloud import storage, datastore
@@ -165,8 +165,11 @@ def get_all_users():
 
     # Return array with all users. Success.
     for entity in all_users:
-        user_data = dict(entity)
-        user_data["id"] = entity.key.id
+        user_data = {
+            "id": entity.key.id,
+            "role": entity.get("role"),
+            "sub": entity.get("sub")
+        }
         output.append(user_data)
 
     return jsonify(output), 200
