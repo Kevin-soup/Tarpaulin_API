@@ -3,6 +3,7 @@ from urllib.request import urlopen
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify, send_file
 from google.cloud import storage, datastore
+from google.cloud.datastore.query import PropertyFilter
 from jose import jwt
 
 app = Flask(__name__)
@@ -150,7 +151,7 @@ def get_all_users():
 
     # Identify user's role from Datastore.
     query = client.query(kind='users')
-    query.add_filter("sub", "=", user_sub)
+    query.add_filter(filter=PropertyFilter("sub", "=", user_sub))
     results = list(query.fetch())
 
     # Check for admin role. Failure.
@@ -192,7 +193,7 @@ def get_user(id):
 
     # Identify user's role from Datastore.
     query = client.query(kind='users')
-    query.add_filter("sub", "=", user_sub)
+    query.add_filter(filter=PropertyFilter("sub", "=", user_sub))
     results = list(query.fetch())
 
     # Check for admin role and user self access. Failure.
@@ -337,6 +338,66 @@ def delete_avatar(id):
     client.put(target_user)
 
     return '', 204
+
+
+################################### CREATE A COURSE ###################################
+@app.route(COURSE, methods=['POST'])
+def create_course():
+    # Save JSON request.
+    content = request.get_json()
+
+    # Handles missing attributes. Failure.
+    required_fields = ["subject", "number", "title", "term", "instructor_id"]
+    if not content or not all(field in content for field in required_fields):
+        return {"Error": "The request body is missing at least one of the required attributes"}, 400
+
+    # Validate JWT and extract sub. 
+    payload = verify_jwt(request)
+    user_sub = payload.get("sub")
+
+    # Identify user's role from Datastore.
+    query = client.query(kind='users')
+    query.add_filter(filter=PropertyFilter("sub", "=", user_sub))
+    results = list(query.fetch())
+
+    # Check for admin role. Failure.
+    requesting_user = results[0]
+    if requesting_user.get("role") != "admin":
+        return {"Error": "The JWT is valid but doesn’t belong to an admin."}, 403
+
+    # Check if instructor id exists and corresponds to a user with the role "instructor". Failure.
+    instructor_key = client.key('users', int(content["instructor_id"]))
+    instructor = client.get(key=instructor_key)
+
+    if instructor is None or instructor.get("role") != "instructor":
+        return {"Error": "The value of instructor_id is invalid"}, 409
+
+    # Create new course entity. Success.
+    new_course = datastore.Entity(key=client.key('courses'))
+    new_course.update({
+        "subject": content["subject"],
+        "number": int(content["number"]),
+        "title": content["title"],
+        "term": content["term"],
+        "instructor_id": int(content["instructor_id"]),
+        "students": []  
+    })
+    client.put(new_course)
+
+    # Return course information. Success. success response layout.
+    course_id = new_course.key.id
+    response_data = {
+        "id": course_id,
+        "instructor_id": new_course["instructor_id"],
+        "number": new_course["number"],
+        "self": f"{request.url_root.rstrip('/')}/courses/{course_id}",
+        "subject": new_course["subject"],
+        "term": new_course["term"],
+        "title": new_course["title"]
+    }
+
+    return jsonify(response_data), 201
+
 
 
 
