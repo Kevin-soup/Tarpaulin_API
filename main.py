@@ -11,7 +11,7 @@ storage_client = storage.Client()
 load_dotenv()
 
 # Constant.
-AVATAR_BUCKET='___'
+AVATAR_BUCKET = 'kevin-soup-avatar'
 USER = '/users'
 COURSE = '/courses'
 ID = '/id'
