@@ -99,6 +99,11 @@ def login_user():
     # Save JSON request.
     content = request.get_json()
 
+    # Handles missing attributes. Failure.
+    required_fields = ["username", "password"]
+    if not content or not all(field in content for field in required_fields):
+        return jsonify(ERROR_400), 400
+    
     # Create token request body.
     username = content["username"]
     password = content["password"]
@@ -115,6 +120,10 @@ def login_user():
     
     # Post token to Auth0.
     response = requests.post(url, json=body, headers=headers)
+
+    # Validate password on Auth0.
+    if response.status_code != 200:
+        return jsonify(ERROR_401), 401
     
     # Return Auth0 response.
     return jsonify({"token": response.json().get("id_token")}), 200
@@ -416,9 +425,12 @@ def get_all_courses():
     course_query.order = ['subject']
     
     # Iterator pages for pagination.
-    c_iterator = course_query.fetch(limit=limit, offset=offset)
-    pages = c_iterator.pages
-    results = list(next(pages))
+    course_iterator = course_query.fetch(limit=limit, offset=offset)
+    pages = course_iterator.pages
+    try:
+        results = list(next(pages))
+    except StopIteration:
+        results = []
 
     # Define base URL.
     base_url = request.url_root.rstrip('/')
@@ -442,8 +454,8 @@ def get_all_courses():
         "courses": courses_list
     }
 
-    # Add next page URL.
-    if c_iterator.next_page_token:
+    # Add pagination.
+    if course_iterator.next_page_token:
         next_offset = offset + limit
         response_data["next"] = f"{base_url}/courses?limit={limit}&offset={next_offset}"
 
