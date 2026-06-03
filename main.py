@@ -17,6 +17,12 @@ USER = '/users'
 COURSE = '/courses'
 ID = '/id'
 
+# Error messages.
+ERROR_400 = {"Error": "The request body is invalid"}
+ERROR_401 = {"Error": "Unauthorized"}
+ERROR_403 = {"Error": "You don't have permission on this resource"}
+ERROR_404 = {"Error": "Not found"}
+
 # Auth0 Configuration.
 CLIENT_ID = os.getenv("AUTH0_CLIENT_ID")
 CLIENT_SECRET = os.getenv("AUTH0_CLIENT_SECRET")
@@ -157,7 +163,7 @@ def get_all_users():
     # Check for admin role. Failure.
     requesting_user = results[0]
     if requesting_user.get("role") != "admin":
-        return {"Error": "The JWT is valid but doesn’t belong to an admin."}, 403
+        return jsonify(ERROR_403), 403
 
     # Get all users from Datastore.
     all_users_query = client.query(kind='users')
@@ -189,7 +195,7 @@ def get_user(id):
 
     # Handles non-existent target ID. Failure.
     if target_user is None:
-        return {"Error": "The JWT is valid, but the user doesn’t exist."}, 403
+        return jsonify(ERROR_403), 403
 
     # Identify user's role from Datastore.
     query = client.query(kind='users')
@@ -199,7 +205,7 @@ def get_user(id):
     # Check for admin role and user self access. Failure.
     requesting_user = results[0]
     if requesting_user.get("role") != "admin" and requesting_user.key.id != id:
-        return {"Error": "The JWT is valid, and the user exists, but the JWT doesn’t belong to either an admin or to the user whose ID is in the path parameter."}, 403
+        return jsonify(ERROR_403), 403
 
     # Build return information. Success.
     user_data = {
@@ -239,7 +245,7 @@ def get_user(id):
 def update_avatar(id):
     # Check if file exists in request. Failure.
     if 'file' not in request.files:
-        return {"Error": "The request doesn’t include the key “file.”"}, 400
+        return jsonify(ERROR_400), 400
 
     # Validate JWT and extract sub.
     payload = verify_jwt(request)
@@ -251,7 +257,7 @@ def update_avatar(id):
 
     # Check for user self access. Failure.
     if target_user is None or target_user.get("sub") != user_sub:
-        return {"Error": "The JWT is valid but doesn’t belong to the user whose ID is in the path parameter."}, 403
+        return jsonify(ERROR_403), 403
 
     # Save request file.
     file_obj = request.files['file']
@@ -298,11 +304,11 @@ def get_avatar(id):
 
     # Check for user self access. Failure.
     if target_user is None or target_user.get("sub") != user_sub:
-        return {"Error": "The JWT is valid but doesn’t belong to the user whose ID is in the path parameter."}, 403
+        return jsonify(ERROR_403), 403
 
     # Check if avatar exists. Failure.
     if not target_user.get("avatar_file_name"):
-        return {"Error": "The JWT is valid, belongs to the user whose ID is in the path parameter, but the user doesn’t have an avatar."}, 404
+        return jsonify(ERROR_404), 404
 
     # Get bucket handle.
     bucket = storage_client.get_bucket(AVATAR_BUCKET)
@@ -332,11 +338,11 @@ def delete_avatar(id):
 
     # Check for user self access. Failure.
     if target_user is None or target_user.get("sub") != user_sub:
-        return {"Error": "The JWT is valid but doesn’t belong to the user whose ID is in the path parameter."}, 403
+        return jsonify(ERROR_403), 403
 
     # Check if avatar exists. Failure.
     if not target_user.get("avatar_file_name"):
-        return {"Error": "The JWT is valid, belongs to the user whose ID is in the path parameter, but the user doesn’t have an avatar."}, 404
+        return jsonify(ERROR_404), 404
 
     # Get bucket handle.
     bucket = storage_client.get_bucket(AVATAR_BUCKET)
@@ -363,7 +369,7 @@ def create_course():
     # Handles missing attributes. Failure.
     required_fields = ["subject", "number", "title", "term", "instructor_id"]
     if not content or not all(field in content for field in required_fields):
-        return {"Error": "The request body is missing at least one of the required attributes"}, 400
+        return jsonify(ERROR_400), 400
 
     # Validate JWT and extract sub. 
     payload = verify_jwt(request)
@@ -377,7 +383,7 @@ def create_course():
     # Check for admin role. Failure.
     requesting_user = results[0]
     if requesting_user.get("role") != "admin":
-        return {"Error": "The JWT is valid but doesn’t belong to an admin."}, 403
+        return jsonify(ERROR_403), 403
 
     # Check instructor id and role. Failure.
     instructor_id = content["instructor_id"]
@@ -469,7 +475,7 @@ def get_course(id):
 
     # Handles non-existent target ID. Failure.
     if target_course is None:
-        return {"Error": "No course with this ID exists."}, 404
+        return jsonify(ERROR_404), 404
 
     # Define base URL.
     base_url = request.url_root.rstrip('/')
@@ -504,7 +510,7 @@ def update_course(id):
 
     # Handles non-existent target ID or invalid permissions. Failure.
     if target_course is None:
-        return {"Error": "The JWT is valid, but the course doesn’t exist."}, 403
+        return jsonify(ERROR_403), 403
 
     # Identify user's role from Datastore.
     query = client.query(kind='users')
@@ -514,7 +520,7 @@ def update_course(id):
 
     # Check for admin role. Failure.
     if requesting_user.get("role") != "admin":
-        return {"Error": "The JWT is valid, and the course exists, but the JWT doesn’t belong to an admin."}, 403
+        return jsonify(ERROR_403), 403
 
     # Check instructor id and role. Failure.
     if content and "instructor_id" in content:
@@ -561,7 +567,7 @@ def delete_course(id):
 
     # Handles non-existent target ID. Failure.
     if target_course is None:
-        return {"Error": "The JWT is valid, but the course doesn’t exist."}, 403
+        return jsonify(ERROR_403), 403
 
     # Identify user's role from Datastore.
     query = client.query(kind='users')
@@ -571,7 +577,7 @@ def delete_course(id):
 
     # Check for admin role. Failure.
     if requesting_user.get("role") != "admin":
-        return {"Error": "The JWT is valid, and the course exists, but the JWT doesn’t belong to an admin."}, 403
+        return jsonify(ERROR_403), 403
 
     # Delete course. Success.
     client.delete(course_key)
@@ -595,7 +601,7 @@ def update_enrollment(id):
 
     # Handles non-existent target ID. Failure.
     if target_course is None:
-        return {"Error": "The JWT is valid, but the course doesn’t exist."}, 403
+        return jsonify(ERROR_403), 403
 
     # Identify user's role from Datastore.
     query = client.query(kind='users')
@@ -609,7 +615,7 @@ def update_enrollment(id):
     is_instructor = requesting_user.get("role") == "instructor" and target_course.get("instructor_id") == requesting_user.key.id
 
     if not is_admin and not is_instructor:
-        return {"Error": "The JWT is valid, and the course exists, but the JWT doesn’t belong to either an admin or to the instructor of the course."}, 403
+        return jsonify(ERROR_403), 403
 
     # Save add and remove lists. 
     add_list = content.get("add", [])
@@ -662,7 +668,7 @@ def get_enrollment(id):
 
     # Handles non-existent target ID. Failure.
     if target_course is None:
-        return {"Error": "The JWT is valid, but the course doesn’t exist."}, 403
+        return jsonify(ERROR_403), 403
 
     # Identify user's role from Datastore.
     query = client.query(kind='users')
@@ -675,7 +681,7 @@ def get_enrollment(id):
     is_instructor = requesting_user.get("role") == "instructor" and target_course.get("instructor_id") == requesting_user.key.id
 
     if not is_admin and not is_instructor:
-        return {"Error": "The JWT is valid, and the course exists, but the JWT doesn’t belong to either an admin or to the instructor of the course."}, 403
+        return jsonify(ERROR_403), 403
 
     # Return course information. Success. 
     current_students = target_course.get("students", [])
