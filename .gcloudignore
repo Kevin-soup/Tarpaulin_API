@@ -1,0 +1,15 @@
+.gcloudignore
+.git
+.gitignore
+
+# Environment variables.
+.env
+
+# Local test files.
+avatar_test.png
+postman_test_collection.json
+postman_test_environment.json
+
+# Python cache.
+**/__pycache__/
+*.pyc

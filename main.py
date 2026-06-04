@@ -279,7 +279,7 @@ def update_avatar(id):
     client.put(target_user)
     
     # Build return URL. Success.
-    base_url = request.url_root.replace("http://", "https://").rstrip('/')
+    base_url = request.url_root.rstrip('/')
 
     return jsonify({"avatar_url": f"{base_url}/users/{id}/avatar"}), 200
 
