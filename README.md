@@ -6,7 +6,7 @@ Tarpaulin API is a cloud-hosted backend course management system inspired by lea
 
 This project focuses exclusively on backend development and demonstrates authentication, authorization, database management, file storage integration, and cloud deployment using Google Cloud Platform.
 
-## Architecture
+## UML Diagram - Workflow
 
 The following sequence diagram illustrates the authentication, authorization, and avatar management workflows used by the application.
 
