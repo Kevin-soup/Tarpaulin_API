@@ -23,7 +23,7 @@ ERROR_401 = {"Error": "Unauthorized"}
 ERROR_403 = {"Error": "You don't have permission on this resource"}
 ERROR_404 = {"Error": "Not found"}
 
-# Auth0 Configuration.
+# Auth0 Configuration.   
 CLIENT_ID = os.getenv("AUTH0_CLIENT_ID")
 CLIENT_SECRET = os.getenv("AUTH0_CLIENT_SECRET")
 DOMAIN = os.getenv("AUTH0_DOMAIN")
@@ -348,7 +348,6 @@ def delete_avatar(id):
 
     # Update user information. Success.
     target_user["avatar_file_name"] = None
-    target_user["avatar_url"] = None
     client.put(target_user)
 
     return '', 204

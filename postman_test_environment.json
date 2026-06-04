@@ -4,7 +4,7 @@
 	"values": [
 		{
 			"key": "app_url",
-			"value": "http://127.0.0.1:8080",
+			"value": "https://course-management-tool-498304.uc.r.appspot.com",
 			"type": "default",
 			"enabled": true
 		},
