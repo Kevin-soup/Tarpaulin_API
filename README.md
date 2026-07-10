@@ -2,9 +2,18 @@
 
 ## Overview
 
-Tarpaulin API is a cloud-hosted backend course management system inspired by learning management platforms such as Canvas. The application provides secure RESTful endpoints for managing users, courses, enrollments, and profile avatars using role-based access control, cloud data storage, and JWT authentication.
+Tarpaulin API is a cloud hosted backend course management system inspired by learning management platforms such as Canvas. 
 
-This project focuses exclusively on backend development and demonstrates authentication, authorization, database management, file storage integration, and cloud deployment using Google Cloud Platform.
+This program focuses exclusively on backend development and demonstrates authentication, authorization, database management, file storage integration, and cloud deployment using Google Cloud Platform.
+
+## Features
+
+- Secure RESTful API with JWT authentication
+- Role based access control for administrators, instructors, and students
+- Course, enrollment, and user management
+- Avatar upload and retrieval using Google Cloud Storage
+- Persistent data storage with Google Cloud Datastore
+- Cloud deployment using Google App Engine
 
 ## UML Diagram - Workflow
 
@@ -79,16 +88,6 @@ Cloud Storage manages user avatar files and provides scalable object storage for
 | term          | String    | Yes      | Academic term.                         |
 | title         | String    | Yes      | Course title.                          |
 
-## Objectives
-
-* Design and implement a secure RESTful API.
-* Integrate Auth0 authentication with JWT-based authorization.
-* Store application data using Google Cloud Datastore.
-* Manage user avatar files with Google Cloud Storage.
-* Enforce role-based access control for administrators, instructors, and students.
-* Deploy a cloud-hosted backend application using Google App Engine.
-
-
 ## Technologies Used
 
 * Python
@@ -100,7 +99,3 @@ Cloud Storage manages user avatar files and provides scalable object storage for
 * JWT Authentication
 * REST APIs
 * Postman
-
-## Notes
-
-This project was developed as a portfolio project for Cloud Application Development and showcases secure backend API development using modern cloud-native technologies.
